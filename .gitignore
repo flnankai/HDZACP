@@ -1,0 +1,17 @@
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+*.Rcheck/
+*.tar.gz
+*.zip
+*.gz
+output/
+data/
+results/
+src/*.o
+src/*.a
+src/*.d
+src/*.dll
+src/*.so
+src/symbols.rds

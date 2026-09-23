@@ -1,0 +1,200 @@
+---
+title: "Methods, Calibration, and Change-Point Estimation"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Methods, Calibration, and Change-Point Estimation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+## Statistical target
+
+Let the rows of an (n\times p) matrix be an ordered sequence
+(X_1,\ldots,X_n). The procedures in `HDZACP` test whether at least one
+coordinatewise marginal distribution changes along the sequence and estimate
+the associated split locations. A change in location, scale, tail thickness,
+skewness, modality, or another marginal feature is within scope. A pure copula
+change for which every marginal law stays fixed is not the target.
+
+At each admissible split (k), the package applies a likelihood-ratio-type
+two-sample rank statistic to every coordinate. Its exact finite-sample null
+mean and variance depend on (n) and (k), but not on an unknown continuous
+marginal law. Standardized coordinatewise deficits are then aggregated in two
+ways. ZAS sums evidence over coordinates and is suited to dense changes; ZAM
+takes the coordinatewise maximum and is suited to sparse changes. ZAC combines
+the two pieces of evidence and adapts to unknown sparsity.
+
+Candidate splits are restricted by the trimming fraction `eta`. With
+`eta = 0.1`, the package scans from `ceiling(0.1 * n)` through
+`n - ceiling(0.1 * n)`. Returned estimates are split-after indices, so an
+estimate (k) separates rows (1,\ldots,k) from rows (k+1,\ldots,n).
+
+## Single-change interface
+
+The primary function evaluates any subset of the three procedures in one call:
+
+```{r single}
+library(HDZACP)
+
+set.seed(7)
+n <- 180
+p <- 120
+x <- matrix(rnorm(n * p), n, p)
+x[91:n, 1:8] <- matrix(rt((n - 90) * 8, df = 3) / sqrt(3), n - 90, 8)
+
+fit <- hdzacp_test(
+  x,
+  methods = c("ZAC", "ZAM", "ZAS"),
+  calibration = "permutation",
+  eta = 0.1,
+  alpha = 0.05,
+  permutations = 199,
+  seed = 20260923
+)
+
+fit$results
+fit$components
+```
+
+The result's `results` component contains one row per requested method, with
+the statistic, p-value, rejection decision, estimated split, estimated split
+fraction, selected component, and calibration. The `components` entry records
+the ZAS and ZAM statistics, p-values, and locations used by ZAC. The convenience
+functions `zac_test()`, `zam_test()`, and `zas_test()` forward their arguments to
+`hdzacp_test()`.
+
+For ZAC, the estimated location is inherited from the component with the
+smaller p-value; an exact tie selects the ZAS location. This rule is part of the
+estimator and should be reported when ZAC is used for localization.
+
+## Whole-vector permutation calibration
+
+For the default `calibration = "permutation"`, an entire row of (X) is moved
+as one unit. This preserves arbitrary contemporaneous dependence among the
+coordinates. Under the null, exact permutation validity requires exchangeable
+observation vectors. Serial dependence or a deterministic time trend under the
+null invalidates unrestricted row permutation unless a dependence-respecting
+calibration is supplied.
+
+The observed ordering and `B = permutations` random orderings form a symmetric
+orbit of size (B+1). ZAS and ZAM p-values are ranks within this orbit. For
+each orbit member, ZAC combines the orbit ranks of both components and ranks the
+combined score over the same orbit. This construction includes the observed
+ordering symmetrically and has minimum attainable p-value (1/(B+1)).
+
+Consequently, the permutation count must be chosen with the target level in
+mind. For a 5% test, 199 permutations give resolution 0.005; 999 permutations
+give resolution 0.001. Inside WBS, a Bonferroni threshold smaller than
+(1/(B+1)) cannot reject any local interval and should trigger a diagnostic.
+
+## Analytic calibration
+
+```{r analytic}
+fit_analytic <- hdzacp_test(
+  x,
+  methods = c("ZAC", "ZAM", "ZAS"),
+  calibration = "asymptotic",
+  eta = 0.1
+)
+fit_analytic$results
+```
+
+The analytic option implements the null laws established in the article. ZAS
+uses its Gaussian-process supremum limit, while ZAM uses the appropriate
+extreme-value normalization when the dimension-growth regime is supported by
+the implemented constants. The current analytic MAX calibration is restricted
+to the subcritical branch. Unsupported critical or boundary inputs cause an
+informative failure rather than substitution of an unrelated limit. The
+analytic Cauchy calibration uses the established asymptotic independence of
+the two component statistics.
+
+Permutation and analytic calibration answer the same null question but rely on
+different assumptions. Permutation is the routine default when row
+exchangeability is plausible. Analytic calibration is useful for studying the
+theory and for settings that satisfy the article's Gaussian-copula and
+dimension-growth assumptions.
+
+## Ties and input checks
+
+The rank theory is stated for continuous marginal distributions. The default
+`ties = "error"` avoids silently applying continuous-rank formulas to tied
+data. With permutation calibration, `ties = "random"` and a fixed `tie_seed`
+provide reproducible random tie breaking, applied consistently to the observed
+and permuted orderings. Random tie breaking is not accepted for analytic
+calibration.
+
+Input must be a finite numeric matrix with observations in rows. A data frame
+should be converted only after nonnumeric identifiers and ordering variables
+have been removed. Preprocessing must not use information from a suspected
+post-change regime in a way that artificially aligns or separates the two
+sides of a candidate split.
+
+## Multiple changes
+
+`hdzacp_wbs()` embeds the three local tests in wild binary segmentation. A
+common interval collection lets ZAS, ZAM, and ZAC see the same candidate
+subproblems.
+
+```{r wbs}
+wbs_fit <- hdzacp_wbs(
+  x,
+  methods = c("ZAC", "ZAM", "ZAS"),
+  calibration = "permutation",
+  eta = 0.1,
+  alpha = 0.05,
+  n_intervals = 100,
+  min_interval = 30,
+  include_full = TRUE,
+  permutations = 99,
+  stopping = "paper",
+  seed = 20260924,
+  keep_evidence = TRUE
+)
+
+wbs_fit$changepoints
+wbs_fit$segments
+head(wbs_fit$evidence)
+```
+
+The evidence table records interval endpoints, interval length, the three local
+p-values, the ZAS and ZAM local maximizers, the adaptive maximizer, and ZAC's
+selected component. The `intervals` and `settings` entries permit an exact rerun
+with the same interval collection.
+
+The available stopping choices deliberately separate different inferential
+goals. The default `stopping = "bonferroni"` adjusts over the sampled interval
+collection, `"paper"` applies the article's analytic stopping construction, and
+`"unadjusted"` reproduces the finite-sample simulations in the article. The
+article's multiple-change experiment uses 50 random intervals plus the full
+interval, minimum random-interval length 40, local `eta = 0.1`, 99
+permutations, and unadjusted local 5% stopping.
+
+## External comparisons
+
+`hdzacp_compare()` provides a common result schema but delegates the competing
+methods to their authors' packages:
+
+- KDist uses `KDist::kcpd_single()` and `KDist::kcpd_wbs()` from
+  [zhangxiany-tamu/KDist](https://github.com/zhangxiany-tamu/KDist).
+- HDD uses `HDDchangepoint::test_single_changepoint()` and
+  `HDDchangepoint::multiple_changepoint_detection_wbs()` from
+  [rezadrikvandi/HDDchangepoint](https://github.com/rezadrikvandi/HDDchangepoint).
+- E-Divisive uses `ecp::e.divisive()` from the CRAN package `ecp`.
+- gSeg builds an MST with `ade4::mstree()` and calls `gSeg::gseg1()` from the
+  CRAN packages `ade4` and `gSeg`.
+
+```{r comparisons}
+comparison <- hdzacp_compare(x, permutations = 199, seed = 10)
+comparison
+```
+
+The returned calibration field should be retained in tables. Methods with the
+same nominal permutation count can still use different sequential, conditional,
+or plus-one conventions. The article-reproduction functions preserve those
+choices and record them rather than treating every reported p-value as if it
+came from the same algorithm.
+

@@ -1,0 +1,52 @@
+Package: HDZACP
+Type: Package
+Title: High-Dimensional Distributional Change-Point Inference
+Version: 0.1.0
+Authors@R: c(
+    person("Ping", "Zhao", role = "aut"),
+    person("Long", "Feng", email = "flnankai@nankai.edu.cn",
+           role = c("aut", "cre"))
+  )
+Description: Implements the nonparametric high-dimensional distributional
+    change-point procedures ZAS, ZAM, and ZAC. Coordinatewise likelihood-ratio
+    rank scans are aggregated by a sum, a maximum, or an adaptive Cauchy
+    combination and calibrated by whole-vector permutation. Single- and
+    multiple-change estimation, analytic calibration utilities, competitors,
+    simulations, and reproducible analyses from the accompanying article are
+    provided. Empirical data are downloaded from their official repositories
+    and are not included in the package.
+License: GPL (>= 3)
+Encoding: UTF-8
+Depends: R (>= 4.1.0)
+Imports:
+    graphics,
+    grDevices,
+    parallel,
+    Rcpp,
+    splines,
+    stats,
+    tools,
+    utils
+LinkingTo: Rcpp
+Remotes:
+    zhangxiany-tamu/KDist,
+    rezadrikvandi/HDDchangepoint
+Suggests:
+    ade4,
+    deSolve,
+    ecp,
+    gSeg,
+    HDDchangepoint,
+    KDist,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+URL: https://github.com/flnankai/HDZACP
+BugReports: https://github.com/flnankai/HDZACP/issues
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+NeedsCompilation: yes
+SystemRequirements: C++17, OpenMP (optional)
+

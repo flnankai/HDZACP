@@ -1,0 +1,17 @@
+^HDZACP\.Rproj$
+^\.Rproj\.user$
+^\.github$
+^README\.Rmd$
+^cran-comments\.md$
+^docs$
+^output$
+^data$
+^results$
+^.*\.Rcheck$
+^\.Rhistory$
+^\.RData$
+^\.Ruserdata$
+^.*\.zip$
+^.*\.gz$
+^src/.*\.(o|a|d|dll|so)$
+^src/symbols\.rds$

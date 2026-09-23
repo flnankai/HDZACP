@@ -1,0 +1,268 @@
+---
+title: "Reproducing the Simulations and Empirical Analyses"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Reproducing the Simulations and Empirical Analyses}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+## Reproduction interface
+
+The package separates reusable statistical methods from article-specific
+workflows. The following functions expose every numerical study reported in
+the manuscript:
+
+| Function | Article output |
+|---|---|
+| `reproduce_hdzacp_size()` | AR(1) and compound-symmetry size table |
+| `reproduce_hdzacp_power()` | Student-tail and skewness power figures |
+| `reproduce_hdzacp_location()` | single-change location-error figure |
+| `reproduce_hdzacp_multiple()` | multiple-change count, Hausdorff, and adjusted-Rand results |
+| `reproduce_hdzacp_analytic_size()` | numerical validation of the analytic null calibration |
+| `reproduce_hdzacp_braincloud()` | BrainCloud global tests and single location |
+| `reproduce_hdzacp_gas_sensor()` | Gas Sensor global and multiple-change analysis |
+| `reproduce_hdzacp_article()` | coordinated execution of all workflows |
+
+All functions require an explicit `output_dir` or create a clearly named
+subdirectory under the supplied article directory. They return their principal
+tables invisibly in addition to writing machine-readable CSV or RDS output.
+Random seeds and effective settings are written alongside the results.
+
+Use `quick = TRUE` only as an installation smoke test:
+
+```{r smoke}
+library(HDZACP)
+
+reproduce_hdzacp_size(
+  quick = TRUE,
+  output_dir = "results/smoke/size"
+)
+reproduce_hdzacp_power(
+  quick = TRUE,
+  output_dir = "results/smoke/power"
+)
+```
+
+Full article settings are selected by `quick = FALSE`, which is the default.
+They are computationally expensive and should be run in a persistent output
+directory:
+
+```{r full}
+reproduce_hdzacp_article(
+  quick = FALSE,
+  output_dir = "results/article"
+)
+```
+
+The scripts installed in `inst/reproduce/` offer the same interface from a
+terminal. `00_run_all.R --quick` performs a smoke run; omitting `--quick` uses
+the full defaults.
+
+## Global size
+
+Under the null, (X_i\sim N_p(0,\Sigma)), independently over time. Both
+dependence models use (ho=0.5):
+
+\[
+(\Sigma_{\mathrm{AR}})_{jk}=\rho^{|j-k|},\qquad
+\Sigma_{\mathrm{CS}}=(1-\rho)I_p+\rho\mathbf 1_p\mathbf 1_p^\top.
+\]
+
+The grid is (n\in\{100,200\}) and (p\in\{100,200,400\}). Every cell uses
+1,000 Monte Carlo replications, 199 whole-vector permutations, trimming
+fraction 0.1, and nominal level 0.05. The comparison contains ZAC, ZAM, ZAS,
+KDist, HDD, E-Divisive, and gSeg.
+
+```{r size}
+reproduce_hdzacp_size(
+  quick = FALSE,
+  output_dir = "results/article/size"
+)
+```
+
+## Power under shape and tail changes
+
+The main power study uses (n=p=200), a change after observation 100, and the
+independent-component model (X_i=L_m\varepsilon_i), where
+(L_mL_m^\top=\Sigma_m) for either AR(1) or compound symmetry. Before the
+change all innovations are standard normal. After the change, the first (s)
+innovations are standardized Student variables and the remaining innovations
+stay normal. Thus the mean and covariance do not change.
+
+The sparsity grid is
+
+\[
+s\in\{1,2,5,10,20,30,40,50,60,80,120,200\}.
+\]
+
+For AR(1), the degrees of freedom are
+
+\[
+\nu_{\mathrm{AR}}(s)=\min\{30,2.0001+0.1\log_2 s\}.
+\]
+
+For compound symmetry, let
+
+\[
+w(s)=\begin{cases}
+0,&s\le20,\\
+\log_2(s/20)/\log_2(50/20),&20<s<50,\\
+1,&s\ge50,
+\end{cases}
+\]
+
+and use
+
+\[
+\nu_{\mathrm{CS}}(s)=\min\left\{30,2.0001+
+0.1\{1-w(s)\}\log_2s+0.05w(s)\log_2(p/s)\right\}.
+\]
+
+Two additional AR(1) experiments replace the affected Student innovations by
+(\operatorname{Exp}(1)-1) and by
+(\{\operatorname{Gamma}(4,1)-4\}/2). Each configuration uses 1,000
+replications and 199 permutations.
+
+```{r power}
+reproduce_hdzacp_power(
+  quick = FALSE,
+  output_dir = "results/article/power"
+)
+```
+
+## Single-change localization
+
+The location experiment uses the same AR(1) and compound-symmetry Student-tail
+models. Every method returns one maximizing split, and the article reports
+(|\widehat\tau-100|/200). ZAC inherits the location of the component with the
+smaller permutation p-value. The full experiment again uses 1,000 replications
+and 199 permutations for every configuration.
+
+```{r location}
+reproduce_hdzacp_location(
+  quick = FALSE,
+  output_dir = "results/article/location"
+)
+```
+
+## Multiple changes
+
+The multiple-change design uses (n=p=200), AR(1) dependence with
+(ho=0.5), and true changes at 60 and 140. The first (s) innovations are
+normal, standardized Student, and normal in the three consecutive regimes; all
+remaining innovations stay normal. The degrees of freedom follow the AR(1)
+rule above.
+
+SUM-WBS, MAX-WBS, and Cauchy-adaptive WBS use a shared set of 50 random
+intervals plus the full interval, minimum random-interval length 40, local
+trimming fraction 0.1, 99 local permutations, and unadjusted 5% stopping. KDist
+uses its native WBS implementation, HDD and gSeg use the article's recursive
+implementations, and E-Divisive uses its native divisive recursion. Each value
+of (s) has 100 Monte Carlo replications.
+
+The three criteria are the probability of estimating exactly two changes,
+scaled Hausdorff loss, and the adjusted Rand index of the induced segmentation.
+For an empty estimate, the Hausdorff loss is set to (n/L_{\max}), where
+(L_{\max}) is the longest true segment.
+
+```{r multiple}
+reproduce_hdzacp_multiple(
+  quick = FALSE,
+  output_dir = "results/article/multiple"
+)
+```
+
+## Analytic null calibration
+
+The analytic study is separate from the permutation-based method comparison.
+It validates the corrected SUM, MAX, and Cauchy null laws over the article's
+specified ((n,p)) pairs and dependence designs, and records size, distribution
+diagnostics, numerical sensitivity checks, and calibration constants.
+
+```{r analytic-size}
+reproduce_hdzacp_analytic_size(
+  quick = FALSE,
+  output_dir = "results/article/analytic_size"
+)
+```
+
+## BrainCloud analysis
+
+No expression data are distributed with `HDZACP`. Download the normalized
+Series Matrix from the official GEO record:
+
+- [GSE30272 landing page](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE30272)
+- [GSE30272 Series Matrix](https://ftp.ncbi.nlm.nih.gov/geo/series/GSE30nnn/GSE30272/matrix/GSE30272_series_matrix.txt.gz)
+
+The article keeps subjects aged at least 20 years, adjusts each probe for an
+intercept and the two supplied surrogate variables without adjusting for age,
+removes nonfinite and zero-variance probes, retains the 2,000 largest residual
+variances, applies featurewise median/MAD standardization, and orders subjects
+by age. This yields (n=148), (p=2000). All seven methods use the same matrix,
+trimming fraction 0.1, and 999 permutations.
+
+```{r braincloud}
+reproduce_hdzacp_braincloud(
+  data_file = "data/GSE30272_series_matrix.txt.gz",
+  output_dir = "results/article/braincloud"
+)
+```
+
+The estimated age corresponding to split (k) is the midpoint between the
+observed ages at rows (k) and (k+1). The result is an age-ordered
+cross-sectional transition and must not be interpreted as a longitudinal
+within-person or causal aging threshold.
+
+## Gas Sensor Array Drift analysis
+
+No sensor data are distributed with `HDZACP`. Obtain the archive from UCI:
+
+- [UCI landing page](https://archive.ics.uci.edu/dataset/270/gas%2Bsensor%2Barray%2Bdrift%2Bdataset%2Bat%2Bdifferent%2Bconcentrations)
+- [Official ZIP archive](https://archive.ics.uci.edu/static/public/270/gas+sensor+array+drift+dataset+at+different+concentrations.zip)
+- [Dataset DOI](https://doi.org/10.24432/C5MK6M)
+
+The article retains class-1 ethanol measurements and 128 sensor features.
+Featurewise preprocessing consists of robust standardization, a natural-spline
+location regression on log concentration with four degrees of freedom, an
+analogous scale regression, and final median/MAD standardization. Up to 50
+measurements are sampled without replacement from each of the ten batches. The
+retained counts are (50,50,50,50,28,50,50,30,50,50), giving (n=458).
+Rows are randomized within batch using the fixed article seed, while batch
+order is preserved.
+
+Global tests use 999 permutations. The proposed multiple-change methods use
+100 WBS intervals and 199 local permutations. The nine adjacent-batch
+boundaries are reference transitions, not change points imposed on the
+algorithms.
+
+```{r gas}
+reproduce_hdzacp_gas_sensor(
+  data_zip = "data/gas_sensor_array_drift.zip",
+  output_dir = "results/article/gas_sensor"
+)
+```
+
+The interpretation is descriptive. Exact acquisition times within a batch are
+unavailable, and concentration support differs across batches. The location
+and scale adjustment reduces the concentration effect but cannot remove
+confounding where batch-specific concentration supports do not overlap.
+
+## Optional comparison packages
+
+The full seven-method workflows need three CRAN packages and two GitHub
+packages in addition to the core package:
+
+```{r install, eval=FALSE}
+install.packages(c("ade4", "ecp", "gSeg", "remotes"))
+remotes::install_github("zhangxiany-tamu/KDist")
+remotes::install_github("rezadrikvandi/HDDchangepoint")
+```
+
+The output metadata records the package versions and the precise wrapper used.
+This is important because KDist and HDDchangepoint are development packages,
+and because permutation conventions differ across methods.
